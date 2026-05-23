@@ -1,0 +1,27 @@
+[
+  {
+    "question": "What file types does AI Knowledge Agent import?",
+    "expected_answer": "Markdown and TXT files",
+    "source_doc": "product-brief.md"
+  },
+  {
+    "question": "Why is the first interface a CLI?",
+    "expected_answer": "The CLI is fast to test and easy to package later.",
+    "source_doc": "product-brief.md"
+  },
+  {
+    "question": "How should user data survive upgrades?",
+    "expected_answer": "User data should stay outside the installed application directory.",
+    "source_doc": "product-brief.md"
+  },
+  {
+    "question": "What metadata does each chunk store?",
+    "expected_answer": "Filename, file path, document id, and chunk index.",
+    "source_doc": "rag-design.md"
+  },
+  {
+    "question": "What does the first eval runner measure?",
+    "expected_answer": "Retrieval hit rate and latency.",
+    "source_doc": "rag-design.md"
+  }
+]

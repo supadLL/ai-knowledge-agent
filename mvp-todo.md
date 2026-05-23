@@ -1,168 +1,89 @@
 # AI Knowledge Agent MVP TODO
 
-## MVP Goal
+## Final Goal
 
-Build a minimal but complete personal knowledge-base Agent:
+The live project goal is maintained in [docs/goal.md](docs/goal.md).
 
-1. Import local Markdown or TXT documents.
-2. Chunk and embed the content.
-3. Retrieve relevant chunks for a user question.
-4. Generate an answer with citations.
-5. Run a small evaluation set to compare quality across prompt and retrieval settings.
-
-## Definition Of Done
-
-- A user can add documents from a local folder.
-- The app creates and persists a searchable index.
-- A user can ask a question and get an answer grounded in retrieved chunks.
-- Each answer includes at least one source citation.
-- An eval command can run at least 10 test questions.
-- The project has a clear README, architecture diagram, and demo path.
-
-## Phase 0: Project Setup
-
-- [ ] Choose stack:
-  - Suggested backend: Python + FastAPI.
-  - Suggested vector store: Chroma or SQLite-backed local store.
-  - Suggested UI: minimal React/Vite or simple CLI first.
-- [ ] Create repository structure:
-  - `src/`
-  - `data/raw/`
-  - `data/index/`
-  - `evals/`
-  - `docs/`
-  - `tests/`
-- [ ] Add `.env.example`.
-- [ ] Add README with project goal and local run instructions.
-- [ ] Add basic formatter/linter configuration.
-
-## Phase 1: Document Ingestion
-
-- [ ] Implement file loader for `.md`.
-- [ ] Implement file loader for `.txt`.
-- [ ] Normalize extracted text.
-- [ ] Add metadata:
-  - filename
-  - file path
-  - document id
-  - chunk index
-- [ ] Implement chunking strategy:
-  - default chunk size
-  - overlap size
-  - stable chunk ids
-- [ ] Add a command:
-  - `index ./data/raw`
-- [ ] Verify indexed chunk count is printed after ingestion.
-
-## Phase 2: Embedding And Storage
-
-- [ ] Add embedding provider abstraction.
-- [ ] Implement first embedding provider.
-- [ ] Persist chunk text, metadata, and vectors.
-- [ ] Implement similarity search.
-- [ ] Add top-k retrieval configuration.
-- [ ] Add a smoke test with a tiny fixture document.
-
-## Phase 3: Question Answering
-
-- [ ] Implement query endpoint or CLI command:
-  - `ask "your question"`
-- [ ] Retrieve top-k chunks.
-- [ ] Construct grounded prompt.
-- [ ] Generate answer.
-- [ ] Include citations using document name and chunk index.
-- [ ] Add fallback behavior when no relevant context is found.
-- [ ] Log:
-  - query
-  - retrieved chunk ids
-  - similarity scores
-  - latency
-  - token usage if available
-
-## Phase 4: Minimal UI Or CLI
-
-- [ ] Choose MVP interface:
-  - CLI is faster.
-  - Web UI is better for portfolio display.
-- [ ] If CLI:
-  - Add `index`, `ask`, and `eval` commands.
-- [ ] If Web UI:
-  - Add document upload page.
-  - Add chat/question page.
-  - Add source citation display.
-  - Add loading and error states.
-
-## Phase 5: Evaluation
-
-- [ ] Create `evals/questions.json`.
-- [ ] Add at least 10 question-answer-source cases.
-- [ ] Implement eval runner.
-- [ ] Track:
-  - answer correctness
-  - citation correctness
-  - retrieval hit rate
-  - average latency
-  - average token cost
-- [ ] Save eval results to `evals/results/`.
-- [ ] Add a short failure analysis section after each run.
-
-## Phase 6: Polish For Resume
-
-- [ ] Add architecture diagram to README.
-- [ ] Add demo screenshots or GIF.
-- [ ] Add example documents and example questions.
-- [ ] Add a section explaining RAG design tradeoffs:
-  - chunk size
-  - overlap
-  - top-k
-  - prompt rules
-  - citation strategy
-- [ ] Add a section explaining evaluation results.
-- [ ] Write resume bullets.
-
-## Suggested First Implementation Order
-
-1. CLI-only ingestion.
-2. Local vector search.
-3. CLI question answering with citations.
-4. Eval runner.
-5. Web UI after the core pipeline works.
-
-## Minimal Folder Structure
+When the app is running, open:
 
 ```text
-ai-knowledge-agent/
-  knowledge-graph.md
-  mvp-todo.md
-  README.md
-  .env.example
-  src/
-    app/
-    ingestion/
-    retrieval/
-    generation/
-    evaluation/
-  data/
-    raw/
-    index/
-  evals/
-    questions.json
-    results/
-  tests/
+http://127.0.0.1:8766/goal
 ```
 
-## Initial Resume Bullets Draft
+## MVP Definition
 
-- Built a personal AI knowledge-base Agent with document ingestion, chunking, embeddings, vector retrieval, grounded generation, and citation-backed answers.
-- Designed a lightweight RAG evaluation pipeline to measure retrieval hit rate, citation correctness, latency, and answer quality across prompt and retrieval configurations.
-- Implemented an extensible architecture separating ingestion, retrieval, generation, and evaluation modules for future support of PDF parsing, web import, and MCP tool integration.
+Build a Windows-first, local-first knowledge workspace that can:
 
-## Near-Term Stretch Goals
+1. Index local Markdown and TXT files.
+2. Persist chunks, metadata, vectors, config, logs, and eval reports locally.
+3. Answer user questions in a chat-style UI with citations.
+4. Evaluate retrieval quality with saved reports.
+5. Import model accounts through OAuth, Token/JSON, API Key, import URL, or local file.
+6. Route generation through an app-internal Fuel Pool without changing machine-wide proxy settings.
+7. Keep secrets masked in API responses, UI, errors, and test output.
 
-- [ ] Add PDF parsing.
-- [ ] Add reranking.
-- [ ] Add web page import.
-- [ ] Add model/provider switcher.
-- [ ] Add MCP server for external tool integration.
-- [ ] Add GitHub repository indexing.
-- [ ] Add learning-roadmap generation from indexed notes.
+## Completed
+
+- [x] Python package structure under `src/ai_knowledge_agent`.
+- [x] Local data layout for raw files, index, config, logs, and eval results.
+- [x] `.env.example` and Git ignore rules for env files, local databases, indexes, logs, virtualenvs, caches, dependency folders, and generated eval output.
+- [x] CLI commands for indexing, asking, eval, and diagnostics.
+- [x] FastAPI local web server and static frontend.
+- [x] Markdown/TXT ingestion.
+- [x] Text normalization, CJK-aware tokenization, chunking, stable chunk ids, and overlap handling.
+- [x] Local hash embedding provider.
+- [x] SQLite-backed document, chunk, and vector store.
+- [x] Hybrid retrieval with top-k configuration.
+- [x] Local extractive answer generation with citations.
+- [x] OpenAI-compatible generation and embedding provider boundaries.
+- [x] Chat-style ask UI with source expansion.
+- [x] Document/index status page.
+- [x] Eval runner and web eval trigger.
+- [x] Fuel Pool account storage, masking, usage tracking, cooldown, priority, weight, and dispatch strategies.
+- [x] Internal-only account dispatch for app RAG/eval generation.
+- [x] OAuth account import with automatic callback completion.
+- [x] Token/session JSON, raw token, API Key, import URL, and local JSON file account imports.
+- [x] Account health checks.
+- [x] Bilingual UI switch.
+- [x] `/goal` and `/api/goal` project target checkpoint.
+- [x] Tests for ingestion, chunking, embeddings, storage, retrieval, generation, eval, Fuel Pool, account storage, OAuth, internal conversion, web APIs, and goal routes.
+
+## Current Verification
+
+Run before every handoff:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+node --check src\ai_knowledge_agent\static\app.js
+```
+
+## Remaining MVP Hardening
+
+- [x] Add a local smoke script that runs tests, lint, JavaScript syntax checks, sample indexing, sample ask, eval, and `/goal` HTTP check when the server is running.
+- [x] Add browser-driven frontend smoke test that opens `http://127.0.0.1:8766/`, indexes sample files, asks a sample question, and verifies citations.
+- [x] Add a document registry so folders can be reindexed without retyping paths.
+- [x] Add per-document delete/reindex controls.
+- [x] Add eval history list in the UI.
+- [x] Add eval history comparison in the UI.
+- [x] Add safer credential storage for refresh token sets before long-lived account refresh.
+- [x] Add token refresh before Codex-account generation when refresh credentials are available.
+- [x] Add a Windows-first packaged launch path and smoke test.
+- [x] Add app data migration notes for future upgrades.
+
+## Next Build Order
+
+1. Final release-oriented smoke checks.
+2. Final review and push once GitHub auth is available.
+3. Stretch goals after MVP sign-off.
+
+## Stretch Goals
+
+- [ ] PDF parsing.
+- [ ] Reranking.
+- [ ] Web page import.
+- [ ] GitHub repository indexing.
+- [ ] MCP server for external tool integration.
+- [ ] Learning-roadmap generation from indexed notes.
+- [ ] Windows installer.
+- [ ] Automatic update flow or documented manual upgrade path.

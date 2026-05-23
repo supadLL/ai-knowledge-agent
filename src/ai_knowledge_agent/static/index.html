@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Knowledge Agent</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark">AK</span>
+        <div>
+          <strong>AI Knowledge Agent</strong>
+          <span>Local RAG workspace</span>
+        </div>
+      </div>
+      <nav aria-label="Primary">
+        <a href="#diagnostics" data-page="diagnostics" data-i18n="navDiagnostics">Diagnostics</a>
+        <a href="#documents" data-page="documents" data-i18n="navDocuments">Documents</a>
+        <a href="#ask" data-page="ask" data-i18n="navAsk">Ask</a>
+        <a href="#llm-access" data-page="llm-access" data-i18n="navLlmAccess">Fuel Pool</a>
+        <a href="#evaluations" data-page="evaluations" data-i18n="navEvaluations">Evaluations</a>
+        <a href="#settings" data-page="settings" data-i18n="navSettings">Settings</a>
+      </nav>
+    </aside>
+
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">Local Knowledge Console</h1>
+          <p id="pageSubtitle">Index local notes, ask grounded questions, and inspect citation quality.</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="languageToggle" class="secondary" type="button">中文</button>
+          <button id="refreshStats" type="button" data-i18n="refresh">Refresh</button>
+        </div>
+      </header>
+      <div id="statusBar" class="status" role="status" data-i18n="ready">Ready</div>
+
+      <section class="grid">
+        <article class="panel span-2" id="diagnostics" data-page-section="diagnostics">
+          <div class="panel-head">
+            <h2 data-i18n="indexStatus">Index Status</h2>
+            <span id="indexBadge" class="badge" data-i18n="checking">Checking</span>
+          </div>
+          <dl id="statsGrid" class="stats"></dl>
+        </article>
+
+        <article class="panel span-2" id="documents" data-page-section="documents">
+          <h2 data-i18n="documentsTitle">Documents</h2>
+          <label for="sourcePath" data-i18n="sourceFolder">Source folder</label>
+          <div class="inline">
+            <input id="sourcePath" value="./data/raw" />
+            <button id="indexButton" type="button" data-i18n="rebuild">Rebuild</button>
+          </div>
+          <div class="actions source-actions">
+            <button id="saveSourceButton" class="secondary" type="button" data-i18n="saveSource">Save Source</button>
+          </div>
+          <div id="documentSourcesList" class="source-registry"></div>
+          <div id="documentsList" class="documents-list"></div>
+        </article>
+
+        <article class="panel span-2" id="ask" data-page-section="ask">
+          <h2 data-i18n="askTitle">Ask</h2>
+          <div id="chatThread" class="chat-thread" aria-live="polite"></div>
+          <form id="chatForm" class="chat-composer">
+            <textarea
+              id="questionInput"
+              rows="2"
+              data-i18n-placeholder="questionPlaceholder"
+            >What metadata does each chunk store?</textarea>
+            <button id="askButton" type="submit" data-i18n="send">Send</button>
+          </form>
+        </article>
+
+        <article class="panel span-2" id="llm-access" data-page-section="llm-access">
+          <div class="panel-head">
+            <h2 data-i18n="llmAccessTitle">Fuel Pool</h2>
+            <div class="panel-actions">
+              <span id="llmUsageBadge" class="badge" data-i18n="noTrackedCalls">No tracked calls</span>
+              <button id="openImportModal" type="button" data-i18n="importAccount">Import Account</button>
+            </div>
+          </div>
+          <div class="fuel-strip">
+            <div>
+              <label for="fuelStrategy" data-i18n="dispatchStrategy">Dispatch strategy</label>
+              <select id="fuelStrategy"></select>
+            </div>
+            <p class="settings-copy" data-i18n="internalFuelCopy">Fuel Pool is only used inside this app and will not change local Codex or API proxy settings.</p>
+          </div>
+          <div class="accounts-workspace">
+            <div id="llmAccountsList" class="llm-accounts"></div>
+          </div>
+        </article>
+
+        <article class="panel span-2" id="evaluations" data-page-section="evaluations">
+          <h2 data-i18n="evaluationTitle">Evaluation</h2>
+          <label for="questionsPath" data-i18n="questionsFile">Questions file</label>
+          <input id="questionsPath" value="./evals/questions.json" />
+          <div class="actions">
+            <button id="evalButton" type="button" data-i18n="runEval">Run Eval</button>
+          </div>
+          <pre id="evalBox" class="answer compact"></pre>
+          <div id="evalHistoryList" class="eval-history"></div>
+        </article>
+
+        <article class="panel span-2" id="settings" data-page-section="settings">
+          <h2 data-i18n="providerSettings">Provider Settings</h2>
+          <p class="settings-copy" data-i18n="providerSettingsCopy">
+            Provider values are read from environment variables. Use CLI diagnostics to confirm
+            local packaged configuration before release builds.
+          </p>
+          <div id="providerList" class="provider-list"></div>
+        </article>
+      </section>
+    </main>
+
+    <div id="importModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+      <section class="modal">
+        <header class="modal-head">
+          <div>
+            <h2 data-i18n="importAccount">Import Account</h2>
+            <p data-i18n="importSubtitle">Choose a connection method and add it to the local fuel pool.</p>
+          </div>
+          <button id="closeImportModal" class="secondary" type="button" data-i18n="close">Close</button>
+        </header>
+        <div class="import-tabs" role="tablist">
+          <button class="import-tab active" type="button" data-import-tab="oauth">OAuth</button>
+          <button class="import-tab" type="button" data-import-tab="token">Token / J...</button>
+          <button class="import-tab" type="button" data-import-tab="api_key">API Key</button>
+          <button class="import-tab" type="button" data-import-tab="local_import" data-i18n="importShort">Import</button>
+        </div>
+
+        <section class="import-pane active" data-import-pane="oauth">
+          <p class="pane-copy" data-i18n="oauthCopy">Open the authorization page in your browser, then paste the callback URL.</p>
+          <label for="oauthLink" data-i18n="authLink">Authorization link</label>
+          <div class="inline">
+            <input id="oauthLink" readonly value="Preparing OAuth login..." />
+            <button id="copyOauthLink" class="secondary" type="button" data-i18n="copy">Copy</button>
+          </div>
+          <button id="openOauthLink" class="wide-gradient" type="button" data-i18n="openInBrowser">Open in browser</button>
+          <label for="oauthCallbackUrl" data-i18n="callbackUrl">Callback URL</label>
+          <div class="inline">
+            <input id="oauthCallbackUrl" data-i18n-placeholder="callbackPlaceholder" />
+            <button id="oauthContinue" class="secondary" type="button" data-i18n="authorizedContinue">Authorized, continue</button>
+          </div>
+          <div class="token-note" data-i18n="oauthNote">After authorization, this field can be used to extract a token if the callback contains one.</div>
+        </section>
+
+        <section class="import-pane" data-import-pane="token">
+          <p class="pane-copy" data-i18n="tokenPasteHint">Paste session JSON, auth.json, account JSON, Sub2API JSON, accessToken, or refresh_token.</p>
+          <details class="example-box">
+            <summary data-i18n="requiredFieldsExample">Required fields and example</summary>
+            <pre>{"accessToken":"eyJ...","base_url":"https://chatgpt.com/backend-api/codex","model":"gpt-5.4"}</pre>
+          </details>
+          <textarea id="tokenJsonInput" class="token-textarea" rows="7" data-i18n-placeholder="tokenJsonPlaceholder"></textarea>
+          <button id="importTokenJson" class="wide-gradient" type="button" data-i18n="importAction">Import</button>
+        </section>
+
+        <section class="import-pane" data-import-pane="api_key">
+          <p class="pane-copy" data-i18n="providerPresetCopy">Choose a saved provider preset, then adjust fields if needed.</p>
+          <div class="provider-preset-grid">
+            <button type="button" class="provider-chip" data-provider-preset="custom">Custom</button>
+            <button type="button" class="provider-chip active" data-provider-preset="cockpit">Cockpit Api</button>
+            <button type="button" class="provider-chip" data-provider-preset="openai">OpenAI Official</button>
+            <button type="button" class="provider-chip" data-provider-preset="azure">Azure OpenAI</button>
+            <button type="button" class="provider-chip" data-provider-preset="openrouter">OpenRouter</button>
+            <button type="button" class="provider-chip" data-provider-preset="deepseek">DeepSeek</button>
+            <button type="button" class="provider-chip" data-provider-preset="moonshot">Moonshot</button>
+            <button type="button" class="provider-chip" data-provider-preset="siliconflow">SiliconFlow</button>
+          </div>
+          <form id="llmAccountForm" class="llm-form modal-form">
+            <div class="split-row">
+              <div class="form-row">
+                <label for="llmName" data-i18n="name">Name</label>
+                <input id="llmName" value="Upstream relay" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="llmProviderType" data-i18n="connectionType">Connection type</label>
+                <select id="llmProviderType"></select>
+              </div>
+            </div>
+            <div class="split-row">
+              <div class="form-row">
+                <label for="llmBaseUrl">Base URL</label>
+                <input id="llmBaseUrl" value="" placeholder="https://api.example.com/v1" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="llmModel">Model</label>
+                <input id="llmModel" value="gpt-5.4" autocomplete="off" />
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="llmApiKey" data-i18n="apiKey">API key</label>
+              <input id="llmApiKey" type="password" autocomplete="off" />
+            </div>
+            <div class="split-row">
+              <div class="form-row">
+                <label for="llmPriority" data-i18n="priority">Priority</label>
+                <input id="llmPriority" type="number" min="0" max="1000" value="100" />
+              </div>
+              <div class="form-row">
+                <label for="llmWeight" data-i18n="weight">Weight</label>
+                <input id="llmWeight" type="number" min="1" max="100" value="1" />
+              </div>
+            </div>
+            <label class="check-row" for="llmEnabled">
+              <input id="llmEnabled" type="checkbox" checked />
+              <span data-i18n="enabledForRag">Enabled for RAG answers</span>
+            </label>
+            <div class="actions">
+              <button id="saveLlmAccount" type="submit" data-i18n="connectLlmAccount">Connect LLM Account</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="import-pane" data-import-pane="local_import">
+          <p class="pane-copy" data-i18n="localImportCopy">Import account JSON from pasted content, an import URL, or a local file.</p>
+          <div class="split-row">
+            <div class="form-row">
+              <label for="externalImportProvider" data-i18n="connectionType">Connection type</label>
+              <select id="externalImportProvider">
+                <option value="auto" data-i18n="autoDetect">Auto detect</option>
+                <option value="codex_local_access">Codex</option>
+                <option value="openai_compatible">OpenAI-compatible</option>
+                <option value="local_relay">sub2api / relay</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="externalImportUrl" data-i18n="importUrl">Import URL</label>
+              <input id="externalImportUrl" placeholder="https://example.com/accounts.json" autocomplete="off" />
+            </div>
+          </div>
+          <textarea id="externalImportPayload" class="token-textarea" rows="7" data-i18n-placeholder="externalImportPlaceholder"></textarea>
+          <div class="actions split-actions">
+            <input id="externalImportFile" type="file" accept=".json,.txt,application/json,text/plain" hidden />
+            <button id="chooseExternalImportFile" class="secondary" type="button" data-i18n="importFromFile">Import from file</button>
+            <button id="importExternalAccount" class="wide-gradient" type="button" data-i18n="importAction">Import</button>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

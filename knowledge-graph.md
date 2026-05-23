@@ -2,13 +2,16 @@
 
 ## Project Positioning
 
-`AI Knowledge Agent` is a personal knowledge-base assistant for learning, project research, and resume-friendly AI engineering practice.
+`AI Knowledge Agent` is a local-first personal knowledge-base assistant designed to become a packaged, one-click deployable desktop or local web application.
 
 The first version focuses on:
 
-- Uploading local documents.
-- Building a searchable knowledge base.
+- Importing local documents from a user-selected folder.
+- Building a persistent searchable knowledge base on the user's machine.
 - Answering questions with cited sources.
+- Providing a simple local UI or CLI that non-developers can run.
+- Keeping configuration, data, logs, and indexes inside predictable local directories.
+- Supporting a future one-click packaging path for Windows/macOS/Linux.
 - Evaluating answer quality with a small benchmark set.
 
 ## Core Knowledge Graph
@@ -139,14 +142,39 @@ sequenceDiagram
 
 ### In Scope
 
-- Upload `.md` and `.txt` files.
+- Import `.md` and `.txt` files from local folders.
 - Parse and chunk text.
 - Generate embeddings.
-- Store chunks in a local vector database.
+- Store chunks in a persistent local vector database.
 - Ask questions against indexed documents.
 - Return answers with source citations.
+- Provide a local user-facing interface:
+  - CLI for fast iteration.
+  - Local web UI or desktop shell for packaged releases.
+- Maintain user data under predictable local paths:
+  - source documents
+  - generated indexes
+  - application config
+  - logs
+  - evaluation results
+- Support environment-based model/provider configuration.
+- Provide startup scripts for local development and packaged usage.
 - Maintain a small evaluation dataset in JSON or YAML.
-- Show basic eval metrics in the CLI or web UI.
+- Show basic eval metrics in the CLI or local UI.
+
+### Packaging Requirements
+
+- The app should be runnable by non-developers without manual Python/Node setup after packaging.
+- The packaged app should initialize required local directories automatically on first launch.
+- The app should preserve user data across upgrades.
+- The app should expose clear controls for:
+  - choosing document folders
+  - rebuilding the index
+  - asking questions
+  - viewing citations
+  - viewing logs or diagnostics
+- Secrets and API keys must be stored outside source-controlled files.
+- Packaging should target Windows first, then macOS/Linux if needed.
 
 ### Out of Scope For MVP
 
@@ -157,6 +185,7 @@ sequenceDiagram
 - Browser automation.
 - Enterprise permission system.
 - Full observability stack.
+- Cloud deployment as the primary runtime.
 
 ## Resume Value Map
 
@@ -166,13 +195,18 @@ sequenceDiagram
 | LLM application design | Uses structured prompts, citations, and failure handling. |
 | Evaluation mindset | Measures quality instead of relying on manual inspection only. |
 | Full-stack delivery | Can expose ingestion, search, answer, and eval flows through a UI. |
-| Product thinking | Solves a clear personal knowledge-management problem. |
+| Local software packaging | Demonstrates packaging an AI app into a user-runnable local product. |
+| Product thinking | Solves a clear personal knowledge-management problem with a realistic distribution path. |
 
 ## Future Expansion Graph
 
 ```mermaid
 graph LR
-  MVP[MVP Knowledge Agent] --> PDF[PDF and OCR]
+  MVP[MVP Knowledge Agent] --> Packaged[One-Click Local App]
+  Packaged --> Windows[Windows Installer]
+  Packaged --> Mac[macOS App Bundle]
+  Packaged --> Linux[Linux AppImage or Package]
+  MVP --> PDF[PDF and OCR]
   MVP --> Web[Web Page Import]
   MVP --> MCP[MCP Tool Server]
   MVP --> Git[GitHub Repo Knowledge Base]
