@@ -90,6 +90,39 @@ def test_web_document_source_registry_flow(tmp_path):
     assert client.get("/api/document-sources").json()["sources"] == []
 
 
+def test_web_document_source_auto_index_flow(tmp_path):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    (raw_dir / "note.md").write_text("Auto index watches local notes.", encoding="utf-8")
+    config = AppConfig(
+        data_dir=tmp_path,
+        raw_dir=raw_dir,
+        index_dir=tmp_path / "index",
+        config_dir=tmp_path / "config",
+        logs_dir=tmp_path / "logs",
+    )
+    app = create_app()
+    app.dependency_overrides[get_config] = lambda: config
+    client = TestClient(app)
+
+    create_response = client.post("/api/document-sources", json={"path": str(raw_dir)})
+    source = create_response.json()["source"]
+    scan_response = client.post("/api/auto-index/scan")
+    disable_response = client.patch(
+        f"/api/document-sources/{source['id']}/auto-index",
+        json={"enabled": False},
+    )
+    status_response = client.get("/api/auto-index")
+
+    assert create_response.status_code == 200
+    assert source["auto_index_enabled"]
+    assert source["last_chunk_count"] == 1
+    assert scan_response.status_code == 200
+    assert not scan_response.json()["results"][0]["changed"]
+    assert disable_response.json()["source"]["auto_index_enabled"] is False
+    assert status_response.json()["enabled_sources"] == 0
+
+
 def test_web_indexed_document_delete_and_reindex(tmp_path):
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()

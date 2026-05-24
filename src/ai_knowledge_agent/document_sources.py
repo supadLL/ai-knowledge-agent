@@ -19,6 +19,10 @@ class DocumentSource:
     updated_at: int
     last_indexed_at: int | None = None
     last_chunk_count: int = 0
+    auto_index_enabled: bool = True
+    last_auto_index_at: int | None = None
+    last_auto_index_error: str | None = None
+    last_auto_fingerprint: str | None = None
 
 
 def now_ms() -> int:
@@ -43,7 +47,10 @@ class DocumentSourceStore:
         with sqlite3.connect(self.path) as connection:
             rows = connection.execute(
                 """
-                SELECT id, label, path, created_at, updated_at, last_indexed_at, last_chunk_count
+                SELECT
+                    id, label, path, created_at, updated_at, last_indexed_at,
+                    last_chunk_count, auto_index_enabled, last_auto_index_at,
+                    last_auto_index_error, last_auto_fingerprint
                 FROM document_sources
                 ORDER BY updated_at DESC
                 """
@@ -55,7 +62,10 @@ class DocumentSourceStore:
         with sqlite3.connect(self.path) as connection:
             row = connection.execute(
                 """
-                SELECT id, label, path, created_at, updated_at, last_indexed_at, last_chunk_count
+                SELECT
+                    id, label, path, created_at, updated_at, last_indexed_at,
+                    last_chunk_count, auto_index_enabled, last_auto_index_at,
+                    last_auto_index_error, last_auto_fingerprint
                 FROM document_sources
                 WHERE id = ?
                 """,
@@ -71,7 +81,10 @@ class DocumentSourceStore:
         with sqlite3.connect(self.path) as connection:
             row = connection.execute(
                 """
-                SELECT id, label, path, created_at, updated_at, last_indexed_at, last_chunk_count
+                SELECT
+                    id, label, path, created_at, updated_at, last_indexed_at,
+                    last_chunk_count, auto_index_enabled, last_auto_index_at,
+                    last_auto_index_error, last_auto_fingerprint
                 FROM document_sources
                 WHERE path = ?
                 """,
@@ -103,6 +116,20 @@ class DocumentSourceStore:
             raise RuntimeError("Document source was not saved.")
         return source
 
+    def update_auto_index(self, source_id: str, enabled: bool) -> DocumentSource | None:
+        timestamp = now_ms()
+        self.initialize()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE document_sources
+                SET auto_index_enabled = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (int(enabled), timestamp, source_id),
+            )
+        return self.get_source(source_id) if cursor.rowcount else None
+
     def mark_indexed(self, source_id: str, chunk_count: int) -> DocumentSource | None:
         timestamp = now_ms()
         self.initialize()
@@ -114,6 +141,37 @@ class DocumentSourceStore:
                 WHERE id = ?
                 """,
                 (timestamp, max(0, chunk_count), timestamp, source_id),
+            )
+        return self.get_source(source_id) if cursor.rowcount else None
+
+    def mark_auto_index_result(
+        self,
+        source_id: str,
+        *,
+        fingerprint: str | None,
+        chunk_count: int,
+        error: str | None = None,
+    ) -> DocumentSource | None:
+        timestamp = now_ms()
+        self.initialize()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE document_sources
+                SET last_auto_index_at = ?, last_auto_index_error = ?,
+                    last_auto_fingerprint = ?, last_indexed_at = ?,
+                    last_chunk_count = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    timestamp,
+                    error,
+                    fingerprint,
+                    None if error else timestamp,
+                    max(0, chunk_count),
+                    timestamp,
+                    source_id,
+                ),
             )
         return self.get_source(source_id) if cursor.rowcount else None
 
@@ -138,6 +196,18 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    ensure_column(connection, "document_sources", "auto_index_enabled", "INTEGER NOT NULL DEFAULT 1")
+    ensure_column(connection, "document_sources", "last_auto_index_at", "INTEGER")
+    ensure_column(connection, "document_sources", "last_auto_index_error", "TEXT")
+    ensure_column(connection, "document_sources", "last_auto_fingerprint", "TEXT")
+
+
+def ensure_column(
+    connection: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
+    rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+    if column not in {row[1] for row in rows}:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def source_from_row(row: sqlite3.Row | tuple) -> DocumentSource:
@@ -149,4 +219,8 @@ def source_from_row(row: sqlite3.Row | tuple) -> DocumentSource:
         updated_at=int(row[4]),
         last_indexed_at=int(row[5]) if row[5] is not None else None,
         last_chunk_count=int(row[6] or 0),
+        auto_index_enabled=bool(row[7]),
+        last_auto_index_at=int(row[8]) if row[8] is not None else None,
+        last_auto_index_error=str(row[9]) if row[9] is not None else None,
+        last_auto_fingerprint=str(row[10]) if row[10] is not None else None,
     )

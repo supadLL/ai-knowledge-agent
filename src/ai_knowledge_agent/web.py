@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from html import escape
 from dataclasses import asdict
 from pathlib import Path
@@ -14,6 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .auto_index import AutoIndexService, AutoIndexWorker
 from .config import AppConfig
 from .codex_proxy import UPSTREAM_CODEX_BASE_URL
 from .codex_oauth import (
@@ -41,6 +43,11 @@ class IndexRequest(BaseModel):
 class DocumentSourceCreateRequest(BaseModel):
     path: str = Field(min_length=1)
     label: str | None = None
+    auto_index_enabled: bool = Field(default=True)
+
+
+class DocumentSourceAutoIndexRequest(BaseModel):
+    enabled: bool = Field(default=True)
 
 
 class AskRequest(BaseModel):
@@ -104,8 +111,20 @@ def get_config() -> AppConfig:
     return config
 
 
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    config = get_config()
+    worker = AutoIndexWorker(config)
+    worker.start()
+    app.state.auto_index_worker = worker
+    try:
+        yield
+    finally:
+        worker.stop()
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="AI Knowledge Agent", version="0.1.0")
+    app = FastAPI(title="AI Knowledge Agent", version="0.1.0", lifespan=app_lifespan)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get("/")
@@ -172,6 +191,25 @@ def create_app() -> FastAPI:
             source_path,
             label=request.label,
         )
+        if not request.auto_index_enabled:
+            source = (
+                DocumentSourceStore(config.config_dir).update_auto_index(source.id, False)
+                or source
+            )
+        else:
+            AutoIndexService(config).scan_source(source)
+            source = DocumentSourceStore(config.config_dir).get_source(source.id) or source
+        return {"source": public_source(source)}
+
+    @app.patch("/api/document-sources/{source_id}/auto-index")
+    def update_document_source_auto_index(
+        source_id: str,
+        request: DocumentSourceAutoIndexRequest,
+        config: Annotated[AppConfig, Depends(get_config)],
+    ) -> dict:
+        source = DocumentSourceStore(config.config_dir).update_auto_index(source_id, request.enabled)
+        if source is None:
+            raise HTTPException(status_code=404, detail="Document source not found")
         return {"source": public_source(source)}
 
     @app.delete("/api/document-sources/{source_id}")
@@ -202,6 +240,14 @@ def create_app() -> FastAPI:
             "source": public_source(indexed_source or source),
             "index": asdict(result),
         }
+
+    @app.get("/api/auto-index")
+    def auto_index_status(config: Annotated[AppConfig, Depends(get_config)]) -> dict:
+        return AutoIndexService(config).status()
+
+    @app.post("/api/auto-index/scan")
+    def scan_auto_index(config: Annotated[AppConfig, Depends(get_config)]) -> dict:
+        return {"results": [asdict(result) for result in AutoIndexService(config).scan_once()]}
 
     @app.post("/api/index")
     def rebuild_index(

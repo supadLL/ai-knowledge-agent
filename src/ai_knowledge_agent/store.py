@@ -102,6 +102,57 @@ def upsert_document_chunks(
     return path
 
 
+def replace_source_chunks(
+    index_dir: Path,
+    source: Path,
+    chunks: list[Chunk],
+    embedding_provider: EmbeddingProvider | None = None,
+) -> Path:
+    index_dir.mkdir(parents=True, exist_ok=True)
+    path = index_path(index_dir)
+    source_path = str(source.resolve())
+    separator = "\\" if "\\" in source_path else "/"
+    source_prefix = f"{source_path}{separator}"
+    with sqlite3.connect(path) as connection:
+        initialize_schema(connection)
+        connection.execute(
+            "DELETE FROM documents WHERE path = ? OR path LIKE ?",
+            (source_path, f"{source_prefix}%"),
+        )
+        for chunk in chunks:
+            embedding = (
+                embedding_provider.embed(chunk.content)
+                if embedding_provider is not None
+                else chunk.embedding
+            )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO documents (id, filename, path, type)
+                VALUES (?, ?, ?, ?)
+                """,
+                (chunk.document_id, chunk.filename, chunk.path, Path(chunk.path).suffix.lstrip(".")),
+            )
+            connection.execute(
+                """
+                INSERT INTO chunks (
+                    id, document_id, filename, path, chunk_index, content, tokens, embedding
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    chunk.id,
+                    chunk.document_id,
+                    chunk.filename,
+                    chunk.path,
+                    chunk.index,
+                    chunk.content,
+                    json.dumps(chunk.tokens, ensure_ascii=False),
+                    json.dumps(embedding),
+                ),
+            )
+    return path
+
+
 def delete_document(index_dir: Path, document_id: str) -> bool:
     path = index_path(index_dir)
     if not path.exists():

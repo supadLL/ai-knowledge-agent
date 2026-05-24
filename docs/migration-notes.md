@@ -40,6 +40,8 @@ Current app database:
 - `document_sources`
 - `codex_oauth_pending`
 
+`document_sources` also stores auto-index state: whether a source is enabled, the last scan fingerprint, last automatic index time, and the last automatic index error.
+
 Current index database:
 
 - document/chunk/vector records managed by `src/ai_knowledge_agent/store.py`
@@ -52,6 +54,13 @@ If index format changes:
 2. Move the old `data\index\knowledge.db` to a timestamped backup.
 3. Rebuild from saved document sources or from `data\raw\`.
 4. Run eval and compare against the previous saved report.
+
+If auto-index behavior changes:
+
+1. Keep saved source paths intact.
+2. Reset `last_auto_fingerprint` only when a full source rescan is intended.
+3. Prefer source-level replacement indexing so one source refresh does not delete other saved sources.
+4. Verify added, modified, and removed `.md` / `.txt` files are reflected in `data\index\knowledge.db`.
 
 If account schema changes:
 

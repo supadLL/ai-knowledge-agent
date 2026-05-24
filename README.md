@@ -20,6 +20,7 @@ http://127.0.0.1:8766/goal
 
 - Index local `.md` and `.txt` files.
 - Save document source folders and reindex them later from the UI.
+- Automatically reindex saved source folders when `.md` / `.txt` files are added, changed, or removed.
 - Persist chunks, metadata, and vectors to `data/index/knowledge.db`.
 - Ask questions through a chat-style local web UI.
 - Return grounded answers with source citations.

@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 
 
-TOKEN_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
+TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]+")
+CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 
 
 def normalize_text(text: str) -> str:
@@ -14,7 +15,20 @@ def normalize_text(text: str) -> str:
 
 
 def tokenize(text: str) -> list[str]:
-    return [match.group(0).lower() for match in TOKEN_RE.finditer(text)]
+    tokens: list[str] = []
+    for match in TOKEN_RE.finditer(text):
+        token = match.group(0).lower()
+        if CJK_RE.fullmatch(token):
+            tokens.extend(cjk_tokens(token))
+        else:
+            tokens.append(token)
+    return tokens
+
+
+def cjk_tokens(text: str) -> list[str]:
+    if len(text) <= 1:
+        return [text]
+    return list(text) + [text[index : index + 2] for index in range(len(text) - 1)]
 
 
 def chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:

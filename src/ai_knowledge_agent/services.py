@@ -17,6 +17,7 @@ from .store import (
     index_updated_at,
     load_document_summaries,
     load_index,
+    replace_source_chunks,
     save_chunks,
     upsert_document_chunks,
 )
@@ -67,6 +68,17 @@ class IndexService:
     def rebuild_index(self, source: Path) -> IndexBuildResult:
         chunks = load_chunks(source, self.config.chunk_size, self.config.chunk_overlap)
         path = save_chunks(self.config.index_dir, chunks, self.embedding_provider)
+        return IndexBuildResult(
+            source=source,
+            index_path=path,
+            chunk_count=len(chunks),
+            embedding_provider=self.embedding_provider.name,
+            embedding_dimensions=self.embedding_provider.dimensions,
+        )
+
+    def replace_source_index(self, source: Path) -> IndexBuildResult:
+        chunks = load_chunks(source, self.config.chunk_size, self.config.chunk_overlap)
+        path = replace_source_chunks(self.config.index_dir, source, chunks, self.embedding_provider)
         return IndexBuildResult(
             source=source,
             index_path=path,

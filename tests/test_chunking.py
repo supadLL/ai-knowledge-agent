@@ -9,5 +9,24 @@ def test_chunk_text_respects_overlap():
     assert chunks[1]
 
 
-def test_tokenize_supports_words_and_cjk():
-    assert tokenize("Hello 知识库 123") == ["hello", "知识库", "123"]
+def test_tokenize_supports_words_numbers_and_cjk():
+    tokens = tokenize("Hello 知识库123")
+
+    assert "hello" in tokens
+    assert "知识" in tokens
+    assert "识库" in tokens
+    assert "123" in tokens
+
+
+def test_chunk_text_preserves_cjk_sentence_boundary():
+    chunks = chunk_text("知识库检索。第二句话包含答案。", chunk_size=8, overlap=2)
+
+    assert chunks[0].endswith("。")
+
+
+def test_tokenize_supports_cjk_character_and_bigram_matches():
+    tokens = tokenize("知识库检索")
+
+    assert "知" in tokens
+    assert "知识" in tokens
+    assert "检索" in tokens

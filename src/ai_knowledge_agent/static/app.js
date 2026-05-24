@@ -66,6 +66,12 @@ const translations = {
     useSource: "Use",
     reindexSource: "Reindex",
     sourceChunks: "{count} chunks",
+    autoIndex: "Auto index",
+    autoIndexOn: "Auto on",
+    autoIndexOff: "Auto off",
+    autoIndexEnabled: "Auto indexing enabled",
+    autoIndexDisabled: "Auto indexing disabled",
+    autoIndexError: "Auto index error",
     askTitle: "Ask",
     question: "Question",
     askAction: "Ask",
@@ -235,6 +241,12 @@ const translations = {
     useSource: "使用",
     reindexSource: "重建",
     sourceChunks: "{count} 个片段",
+    autoIndex: "自动索引",
+    autoIndexOn: "自动开启",
+    autoIndexOff: "自动关闭",
+    autoIndexEnabled: "自动索引已开启",
+    autoIndexDisabled: "自动索引已关闭",
+    autoIndexError: "自动索引错误",
     askTitle: "提问",
     question: "问题",
     askAction: "提问",
@@ -654,7 +666,13 @@ function renderDocumentSources(sources) {
     controls.className = "source-controls";
     title.textContent = source.label;
     path.textContent = source.path;
-    stats.textContent = t("sourceChunks", { count: source.last_chunk_count || 0 });
+    stats.textContent = [
+      t("sourceChunks", { count: source.last_chunk_count || 0 }),
+      source.auto_index_enabled ? t("autoIndexOn") : t("autoIndexOff"),
+    ].join(" | ");
+    if (source.last_auto_index_error) {
+      stats.textContent += ` | ${t("autoIndexError")}: ${source.last_auto_index_error}`;
+    }
     meta.append(title, path, stats);
     controls.append(
       sourceButton(t("useSource"), () => {
@@ -662,6 +680,10 @@ function renderDocumentSources(sources) {
         setStatus(t("statusRefreshed"), "ok");
       }),
       sourceButton(t("reindexSource"), () => reindexDocumentSource(source.id)),
+      sourceButton(
+        source.auto_index_enabled ? t("disable") : t("autoIndex"),
+        () => updateDocumentSourceAutoIndex(source.id, !source.auto_index_enabled),
+      ),
       sourceButton(t("delete"), () => deleteDocumentSource(source.id), "danger"),
     );
     item.append(meta, controls);
@@ -720,6 +742,15 @@ async function reindexDocumentSource(sourceId) {
 async function deleteDocumentSource(sourceId) {
   await api(`/api/document-sources/${sourceId}`, { method: "DELETE" });
   setStatus(t("sourceDeleted"), "ok");
+  await refreshDocuments();
+}
+
+async function updateDocumentSourceAutoIndex(sourceId, enabled) {
+  await api(`/api/document-sources/${sourceId}/auto-index`, {
+    method: "PATCH",
+    body: JSON.stringify({ enabled }),
+  });
+  setStatus(enabled ? t("autoIndexEnabled") : t("autoIndexDisabled"), "ok");
   await refreshDocuments();
 }
 
@@ -1346,6 +1377,13 @@ chatForm.addEventListener("submit", async (event) => {
     setStatus(message, "error");
   }
 });
+document.querySelector("#questionInput").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+    return;
+  }
+  event.preventDefault();
+  chatForm.requestSubmit();
+});
 bind("#evalButton", runEvaluation);
 openImportModalButton.addEventListener("click", () => openImportModal());
 closeImportModalButton.addEventListener("click", closeImportModal);
@@ -1425,3 +1463,6 @@ refreshStats().catch((error) => {
   indexBadge.textContent = t("error");
   setStatus(error instanceof Error ? error.message : String(error), "error");
 });
+window.setInterval(() => {
+  refreshDocuments().catch(() => {});
+}, 15000);
