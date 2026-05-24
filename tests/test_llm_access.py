@@ -133,3 +133,55 @@ def test_codex_account_health_check_uses_internal_proxy(tmp_path, monkeypatch):
     assert result.ok
     assert result.message == "ok"
     assert store.usage_summary().total_tokens == 3
+
+
+def test_codex_account_health_check_refreshes_before_proxy_call(tmp_path, monkeypatch):
+    from ai_knowledge_agent.codex_oauth import CodexOAuthTokens
+
+    store = LlmAccountStore(tmp_path / "config")
+    account = store.create_account(
+        name="Codex",
+        provider_type="codex_local_access",
+        base_url="https://chatgpt.com/backend-api/codex",
+        model="gpt-5.4",
+        api_key="stale-access-token",
+        credential_payload={"refresh_token": "refresh-token", "id_token": "existing-id-token"},
+    )
+
+    def fake_exchange_refresh_token(refresh_token, current_id_token=None):
+        assert refresh_token == "refresh-token"
+        assert current_id_token == "existing-id-token"
+        return CodexOAuthTokens(
+            access_token="fresh-access-token",
+            refresh_token="next-refresh-token",
+            expires_in=3600,
+            token_type="Bearer",
+        )
+
+    def fake_forward(payload, *, access_token, base_url, timeout_seconds):
+        assert payload["model"] == "gpt-5.4"
+        assert access_token == "fresh-access-token"
+        assert base_url == "https://chatgpt.com/backend-api/codex"
+        assert timeout_seconds == 20
+        return type(
+            "Result",
+            (),
+            {
+                "response": {
+                    "choices": [{"message": {"content": "ok"}}],
+                    "usage": {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3},
+                },
+                "latency_ms": 9,
+            },
+        )()
+
+    monkeypatch.setattr("ai_knowledge_agent.codex_oauth.exchange_refresh_token", fake_exchange_refresh_token)
+    monkeypatch.setattr("ai_knowledge_agent.codex_proxy.forward_codex_chat_completion", fake_forward)
+
+    result = LlmAccessService(store).test_account(account)
+    refreshed = store.get_account(account.id)
+
+    assert result.ok
+    assert refreshed is not None
+    assert refreshed.api_key == "fresh-access-token"
+    assert store.credentials_for_account(refreshed)["refresh_token"] == "next-refresh-token"

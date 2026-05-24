@@ -359,18 +359,18 @@ def exchange_code_for_token(code: str, code_verifier: str, redirect_uri: str) ->
     )
 
 
-def exchange_refresh_token(refresh_token: str) -> CodexOAuthTokens:
-    body = urllib.parse.urlencode(
+def exchange_refresh_token(refresh_token: str, current_id_token: str | None = None) -> CodexOAuthTokens:
+    body = json.dumps(
         {
+            "client_id": CLIENT_ID,
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
-            "client_id": CLIENT_ID,
         }
     ).encode("utf-8")
     request = urllib.request.Request(
         TOKEN_ENDPOINT,
         data=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
@@ -385,10 +385,11 @@ def exchange_refresh_token(refresh_token: str) -> CodexOAuthTokens:
     access_token = str(payload.get("access_token") or "").strip()
     if not access_token:
         raise ValueError("Token refresh response is missing access_token.")
+    id_token = str(payload.get("id_token") or current_id_token or "").strip()
     next_refresh_token = str(payload.get("refresh_token") or refresh_token).strip()
     return CodexOAuthTokens(
         access_token=access_token,
-        id_token=str(payload.get("id_token") or "").strip(),
+        id_token=id_token,
         refresh_token=next_refresh_token,
         expires_in=int(payload["expires_in"]) if payload.get("expires_in") else None,
         token_type=str(payload.get("token_type")) if payload.get("token_type") else None,

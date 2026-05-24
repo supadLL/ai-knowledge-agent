@@ -97,7 +97,9 @@ class FuelPoolService:
         started = int(time.time() * 1000)
         if account.provider_type == "codex_local_access":
             try:
-                account = self._refresh_codex_account_if_possible(account)
+                from .codex_accounts import refresh_codex_account_if_possible
+
+                account = refresh_codex_account_if_possible(self.store, account)
                 result = forward_codex_chat_completion(
                     outbound,
                     access_token=account.api_key,
@@ -206,31 +208,6 @@ class FuelPoolService:
         return account.enabled and (
             account.cooldown_until is None or account.cooldown_until <= now_ms
         )
-
-    def _refresh_codex_account_if_possible(self, account: LlmAccount) -> LlmAccount:
-        credentials = self.store.credentials_for_account(account)
-        refresh_token = str(credentials.get("refresh_token") or "").strip()
-        if not refresh_token:
-            return account
-
-        from .codex_oauth import exchange_refresh_token
-
-        tokens = exchange_refresh_token(refresh_token)
-        next_credentials = dict(credentials)
-        if tokens.refresh_token:
-            next_credentials["refresh_token"] = tokens.refresh_token
-        if tokens.id_token:
-            next_credentials["id_token"] = tokens.id_token
-        if tokens.expires_in:
-            next_credentials["expires_in"] = tokens.expires_in
-        if tokens.token_type:
-            next_credentials["token_type"] = tokens.token_type
-        updated = self.store.update_account_secret(
-            account.id,
-            api_key=tokens.access_token,
-            credential_payload=next_credentials,
-        )
-        return updated or account
 
 class FuelPoolGenerationProvider:
     name = "fuel-pool"

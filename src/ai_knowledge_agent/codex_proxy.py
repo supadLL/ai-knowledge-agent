@@ -1,18 +1,28 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import urllib.error
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from .codex_tokens import extract_chatgpt_account_id_from_access_token
 from .llm_access import build_headers
 
 
 UPSTREAM_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
-DEFAULT_CODEX_USER_AGENT = "AI Knowledge Agent Codex Local Proxy"
-DEFAULT_CODEX_ORIGINATOR = "codex_vscode"
+DEFAULT_CODEX_USER_AGENT = "codex_cli_rs/0.118.0 (Mac OS 26.3.1; arm64) iTerm.app/3.6.9"
+DEFAULT_CODEX_ORIGINATOR = "codex_cli_rs"
+CODEX_OFFICIAL_EMPTY_HEADERS = (
+    "Version",
+    "X-Codex-Turn-State",
+    "X-Codex-Turn-Metadata",
+    "X-Client-Request-Id",
+    "X-ResponsesAPI-Include-Timing-Metrics",
+)
 
 
 @dataclass(frozen=True)
@@ -67,6 +77,7 @@ def build_responses_body(payload: dict[str, Any]) -> tuple[dict[str, Any], str, 
         },
         "include": ["reasoning.encrypted_content"],
     }
+    body["prompt_cache_key"] = prompt_cache_key(body)
     if "tools" in payload:
         body["tools"] = normalize_tools(payload["tools"])
     if "tool_choice" in payload:
@@ -211,6 +222,11 @@ def post_codex_responses(
             "Conversation_id": prompt_cache_key(body),
         }
     )
+    for header in CODEX_OFFICIAL_EMPTY_HEADERS:
+        headers.setdefault(header, "")
+    account_id = extract_chatgpt_account_id_from_access_token(access_token)
+    if account_id:
+        headers["ChatGPT-Account-Id"] = account_id
     request = urllib.request.Request(
         url,
         data=json.dumps(body).encode("utf-8"),
@@ -222,6 +238,11 @@ def post_codex_responses(
             return response.read()
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
+        if error.code == 401:
+            detail = (
+                "Unauthorized. The imported account token is invalid, expired, "
+                "or this account is not allowed to use the Codex upstream."
+            )
         raise RuntimeError(f"Codex upstream failed: HTTP {error.code}: {detail}") from error
     except (OSError, TimeoutError, urllib.error.URLError) as error:
         raise RuntimeError(f"Codex upstream failed: {error}") from error
@@ -365,4 +386,5 @@ def content_text(content: Any) -> str:
 
 def prompt_cache_key(body: dict[str, Any]) -> str:
     raw = json.dumps(body.get("input") or body, ensure_ascii=False, sort_keys=True)
-    return f"aka-{abs(hash(raw))}"
+    digest = hashlib.sha1(raw.encode("utf-8")).digest()[:16]
+    return str(uuid.UUID(bytes=digest, version=5))

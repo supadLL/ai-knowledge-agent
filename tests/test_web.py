@@ -1,9 +1,12 @@
+import base64
+import json
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 
 from ai_knowledge_agent.codex_oauth import CodexOAuthTokens
 from ai_knowledge_agent.config import AppConfig
+from ai_knowledge_agent.llm_access import LlmAccountStore
 from ai_knowledge_agent.web import create_app, get_config
 
 
@@ -344,8 +347,9 @@ def test_web_token_import_refreshes_refresh_token(tmp_path, monkeypatch):
     app.dependency_overrides[get_config] = lambda: config
     client = TestClient(app)
 
-    def fake_refresh(refresh_token: str) -> CodexOAuthTokens:
+    def fake_refresh(refresh_token: str, current_id_token: str | None = None) -> CodexOAuthTokens:
         assert refresh_token == "refresh-token"
+        assert current_id_token == ""
         return CodexOAuthTokens(access_token="access-from-refresh")
 
     monkeypatch.setattr("ai_knowledge_agent.web.exchange_refresh_token", fake_refresh)
@@ -360,6 +364,38 @@ def test_web_token_import_refreshes_refresh_token(tmp_path, monkeypatch):
     assert account["name"] == "me@example.com"
     assert account["api_key_masked"] == "acce...resh"
     assert account["has_refresh_credentials"]
+
+
+def test_web_token_import_extracts_plan_type_from_access_token(tmp_path):
+    config = AppConfig(
+        data_dir=tmp_path,
+        raw_dir=tmp_path / "raw",
+        index_dir=tmp_path / "index",
+        config_dir=tmp_path / "config",
+        logs_dir=tmp_path / "logs",
+    )
+    app = create_app()
+    app.dependency_overrides[get_config] = lambda: config
+    client = TestClient(app)
+    access_token = make_jwt(
+        {
+            "https://api.openai.com/auth": {
+                "chatgpt_account_id": "acc-free",
+                "chatgpt_plan_type": "free",
+            }
+        }
+    )
+
+    response = client.post(
+        "/api/llm/import-token",
+        json={"payload": json.dumps({"accessToken": access_token, "email": "free@example.com"})},
+    )
+
+    assert response.status_code == 200
+    account_id = response.json()["account"]["id"]
+    account = LlmAccountStore(config.config_dir).get_account(account_id)
+    assert account is not None
+    assert LlmAccountStore(config.config_dir).credentials_for_account(account)["plan_type"] == "free"
 
 
 def test_web_external_import_accepts_account_array(tmp_path):
@@ -450,3 +486,13 @@ def test_web_external_import_infers_codex_json_token(tmp_path):
     assert account["name"] == "codex@example.com"
     assert account["provider_type"] == "codex_local_access"
     assert account["base_url"] == "https://chatgpt.com/backend-api/codex"
+
+
+def make_jwt(payload):
+    header = base64.urlsafe_b64encode(
+        json.dumps({"alg": "none"}).encode("utf-8")
+    ).decode("ascii").rstrip("=")
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode(
+        "ascii"
+    ).rstrip("=")
+    return f"{header}.{body}.sig"

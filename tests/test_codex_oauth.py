@@ -55,3 +55,43 @@ def test_codex_oauth_callback_page_notifies_and_closes():
 
     assert "ai-knowledge-agent.oauth-callback" in html
     assert "window.close()" in html
+
+
+def test_codex_refresh_uses_json_body_and_reuses_id_token(monkeypatch):
+    import json
+    import urllib.request
+
+    from ai_knowledge_agent.codex_oauth import exchange_refresh_token
+
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def read(self):
+            return json.dumps(
+                {
+                    "access_token": "fresh-access-token",
+                    "refresh_token": "next-refresh-token",
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request: urllib.request.Request, timeout: int):
+        captured["headers"] = dict(request.header_items())
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    tokens = exchange_refresh_token("refresh-token", current_id_token="existing-id-token")
+
+    assert captured["headers"]["Content-type"] == "application/json"
+    assert captured["body"]["grant_type"] == "refresh_token"
+    assert captured["body"]["refresh_token"] == "refresh-token"
+    assert tokens.access_token == "fresh-access-token"
+    assert tokens.id_token == "existing-id-token"
+    assert tokens.refresh_token == "next-refresh-token"

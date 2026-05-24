@@ -25,6 +25,7 @@ from .codex_oauth import (
     public_token_payload,
 )
 from .document_sources import DocumentSourceStore, public_source
+from .codex_tokens import extract_chatgpt_plan_type_from_token
 from .evaluation import list_eval_results, run_eval
 from .fuel_pool import FuelPoolService
 from .fuel_pool import POOL_STRATEGIES
@@ -419,10 +420,12 @@ def create_app() -> FastAPI:
             parsed = parse_token_import_payload(request.payload)
             access_token = parsed["access_token"]
             refresh_token = parsed["refresh_token"]
+            id_token = parsed.get("id_token", "")
             if not access_token and parsed["refresh_token"]:
-                refreshed = exchange_refresh_token(parsed["refresh_token"])
+                refreshed = exchange_refresh_token(parsed["refresh_token"], current_id_token=id_token)
                 access_token = refreshed.access_token
                 refresh_token = refreshed.refresh_token or parsed["refresh_token"]
+                id_token = refreshed.id_token or id_token
             if not access_token:
                 raise ValueError("Could not find accessToken, apiKey, or refresh_token.")
             account = LlmAccountStore(config.config_dir).create_account(
@@ -434,7 +437,15 @@ def create_app() -> FastAPI:
                 enabled=True,
                 priority=90,
                 weight=1,
-                credential_payload={"refresh_token": refresh_token},
+                credential_payload={
+                    "refresh_token": refresh_token,
+                    "id_token": id_token,
+                    "plan_type": resolve_import_plan_type(
+                        parsed.get("plan_type", ""),
+                        access_token,
+                        id_token,
+                    ),
+                },
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -624,6 +635,8 @@ def parse_token_import_payload(raw: str) -> dict[str, str]:
         return {
             "access_token": text,
             "refresh_token": "",
+            "id_token": "",
+            "plan_type": "",
             "name": "Token import",
             "base_url": UPSTREAM_CODEX_BASE_URL,
             "model": "gpt-5.4",
@@ -647,9 +660,17 @@ def parse_token_import_payload(raw: str) -> dict[str, str]:
         "refreshToken",
         "refresh_token",
     )
+    id_token = pick_string(parsed, "idToken", "id_token") or pick_nested_string(
+        parsed,
+        ("tokens", "auth"),
+        "idToken",
+        "id_token",
+    )
     return {
         "access_token": access_token or "",
         "refresh_token": refresh_token or "",
+        "id_token": id_token or "",
+        "plan_type": pick_string(parsed, "plan_type", "planType", "chatgpt_plan_type") or "",
         "name": pick_string(parsed, "name", "email", "account") or "Token import",
         "base_url": pick_string(parsed, "base_url", "baseUrl") or UPSTREAM_CODEX_BASE_URL,
         "model": pick_string(parsed, "model") or "gpt-5.4",
@@ -709,12 +730,19 @@ def import_candidates(parsed: object) -> list[object]:
 def account_spec_from_token(parsed: dict[str, str]) -> dict:
     api_key = parsed["access_token"]
     refresh_token = parsed["refresh_token"]
+    id_token = parsed.get("id_token", "")
     if not api_key and parsed["refresh_token"]:
-        refreshed = exchange_refresh_token(parsed["refresh_token"])
+        refreshed = exchange_refresh_token(parsed["refresh_token"], current_id_token=id_token)
         api_key = refreshed.access_token
         refresh_token = refreshed.refresh_token or parsed["refresh_token"]
+        id_token = refreshed.id_token or id_token
     if not api_key:
         raise ValueError("Import item is missing accessToken, apiKey, or refresh_token.")
+    credential_payload = {
+        "refresh_token": refresh_token,
+        "id_token": id_token,
+        "plan_type": resolve_import_plan_type(parsed.get("plan_type", ""), api_key, id_token),
+    }
     return {
         "name": parsed["name"],
         "provider_type": "codex_local_access",
@@ -724,7 +752,7 @@ def account_spec_from_token(parsed: dict[str, str]) -> dict:
         "enabled": True,
         "priority": 90,
         "weight": 1,
-        "credential_payload": {"refresh_token": refresh_token},
+        "credential_payload": credential_payload,
     }
 
 
@@ -771,10 +799,17 @@ def account_spec_from_import_item(item: object, provider_type_hint: str = "auto"
         "refreshToken",
         "refresh_token",
     )
+    id_token = pick_string(item, "idToken", "id_token") or pick_nested_string(
+        item,
+        ("tokens", "auth", "credentials"),
+        "idToken",
+        "id_token",
+    )
     if not api_key and refresh_token:
-        refreshed = exchange_refresh_token(refresh_token)
+        refreshed = exchange_refresh_token(refresh_token, current_id_token=id_token)
         api_key = refreshed.access_token
         refresh_token = refreshed.refresh_token or refresh_token
+        id_token = refreshed.id_token or id_token
     if not api_key:
         raise ValueError("Import item is missing accessToken, apiKey, or refresh_token.")
     if not base_url:
@@ -792,7 +827,15 @@ def account_spec_from_import_item(item: object, provider_type_hint: str = "auto"
         "enabled": bool_from_item(item, "enabled", default=True),
         "priority": int_from_item(item, "priority", default=90, minimum=0, maximum=1000),
         "weight": int_from_item(item, "weight", default=1, minimum=1, maximum=100),
-        "credential_payload": {"refresh_token": refresh_token},
+        "credential_payload": {
+            "refresh_token": refresh_token,
+            "id_token": id_token,
+            "plan_type": resolve_import_plan_type(
+                pick_string(item, "plan_type", "planType", "chatgpt_plan_type") or "",
+                api_key,
+                id_token,
+            ),
+        },
     }
 
 
@@ -837,6 +880,17 @@ def normalize_secret(secret: str | None) -> str | None:
 
 def default_model_for_provider(provider_type: str) -> str:
     return "gpt-5.4" if provider_type == "codex_local_access" else "gpt-4o-mini"
+
+
+def resolve_import_plan_type(explicit_plan_type: str | None, access_token: str, id_token: str) -> str:
+    explicit = (explicit_plan_type or "").strip()
+    if explicit:
+        return explicit
+    return (
+        extract_chatgpt_plan_type_from_token(access_token)
+        or extract_chatgpt_plan_type_from_token(id_token)
+        or ""
+    )
 
 
 def has_session_token_fields(item: dict) -> bool:

@@ -563,8 +563,10 @@ class LlmAccessService:
         timeout_seconds: int,
     ) -> LlmAccountTestResult:
         try:
+            from .codex_accounts import refresh_codex_account_if_possible
             from .codex_proxy import forward_codex_chat_completion
 
+            account = refresh_codex_account_if_possible(self.store, account)
             result = forward_codex_chat_completion(
                 payload,
                 access_token=account.api_key,

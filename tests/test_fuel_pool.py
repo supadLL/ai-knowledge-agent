@@ -99,8 +99,9 @@ def test_fuel_pool_refreshes_codex_token_before_forwarding(tmp_path, monkeypatch
         credential_payload={"refresh_token": "refresh-token"},
     )
 
-    def fake_refresh(refresh_token: str) -> CodexOAuthTokens:
+    def fake_refresh(refresh_token: str, current_id_token: str | None = None) -> CodexOAuthTokens:
         assert refresh_token == "refresh-token"
+        assert current_id_token == ""
         return CodexOAuthTokens(
             access_token="fresh-access-token",
             refresh_token="next-refresh-token",
